@@ -1,0 +1,14 @@
+#pragma once
+
+#include "physics/contact.h"
+
+#include <vector>
+
+class ContactSolver {
+public:
+    void solve(std::vector<Contact>& contacts, int iterations);
+
+private:
+    void solveContact(Contact& contact);
+    void correctPosition(Contact& contact);
+};

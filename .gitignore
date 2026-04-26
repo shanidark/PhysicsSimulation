@@ -1,0 +1,5 @@
+build/
+.codex
+.vscode/
+codex
+.clangd
