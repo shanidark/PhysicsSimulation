@@ -199,7 +199,9 @@ inline Mat3 toMat3(Quat q) {
 }
 
 inline Vec3 rotate(Quat q, Vec3 v) {
-    return toMat3(q) * v;
+    const Vec3 qv {q.x, q.y, q.z};
+    const Vec3 t = cross(qv, v) * 2.0f;
+    return v + t * q.w + cross(qv, t);
 }
 
 inline Mat3 boxInverseInertiaTensor(float mass, Vec3 size) {

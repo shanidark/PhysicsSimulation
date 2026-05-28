@@ -13,4 +13,5 @@ struct Contact {
 
     float restitution = 0.0f;
     float friction = 0.6f;
+    float restitutionThreshold = 1.0f;
 };

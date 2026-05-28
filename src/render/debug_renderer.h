@@ -14,7 +14,7 @@ class DebugRenderer {
 public:
     bool init(int width, int height, const char* title);
     bool shouldClose() const;
-    void beginFrame();
+    void beginFrame(float dt);
     void drawWorld(const PhysicsWorld& world);
     void endFrame();
     void shutdown();
@@ -23,7 +23,7 @@ public:
     bool stepRequested();
 
 private:
-    void handleInput();
+    void handleInput(float dt);
     void setupCamera();
     void drawGround();
     void drawBody(const RigidBody& body);

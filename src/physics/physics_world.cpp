@@ -10,21 +10,16 @@
 
 namespace {
 Vec3 boxAxis(const RigidBody& body, int axisIndex) {
-    const Mat3 rotation = toMat3(body.orientation);
-    return normalized(Vec3 {
-        rotation.m[0][axisIndex],
-        rotation.m[1][axisIndex],
-        rotation.m[2][axisIndex],
-    });
+    return {
+        body.rotation.m[0][axisIndex],
+        body.rotation.m[1][axisIndex],
+        body.rotation.m[2][axisIndex],
+    };
 }
 
 float boxHalfExtent(const RigidBody& body, int axisIndex) {
-    if (axisIndex == 0) {
-        return body.halfExtents.x;
-    }
-    if (axisIndex == 1) {
-        return body.halfExtents.y;
-    }
+    if (axisIndex == 0) return body.halfExtents.x;
+    if (axisIndex == 1) return body.halfExtents.y;
     return body.halfExtents.z;
 }
 
@@ -61,7 +56,7 @@ std::array<Vec3, 8> boxCorners(const RigidBody& body) {
 
     std::array<Vec3, 8> worldCorners {};
     for (std::size_t i = 0; i < localCorners.size(); ++i) {
-        worldCorners[i] = body.position + rotate(body.orientation, localCorners[i]);
+        worldCorners[i] = body.position + body.rotation * localCorners[i];
     }
     return worldCorners;
 }
@@ -94,30 +89,37 @@ bool tooCloseToExistingPoint(const std::vector<Vec3>& points, Vec3 candidate) {
     }
     return false;
 }
+
+float combinedFriction(float a, float b) {
+    return std::sqrt(a * b);
+}
 }
 
-RigidBody& PhysicsWorld::createBox(float mass, Vec3 size, Vec3 position) {
+size_t PhysicsWorld::createBox(float mass, Vec3 size, Vec3 position) {
     RigidBody body;
     body.position = position;
     body.setBox(mass, size);
     bodies.push_back(body);
-    return bodies.back();
+    return bodies.size() - 1;
 }
 
-RigidBody& PhysicsWorld::createSphere(float mass, float radius, Vec3 position) {
+size_t PhysicsWorld::createSphere(float mass, float radius, Vec3 position) {
     RigidBody body;
     body.position = position;
     body.setSphere(mass, radius);
     bodies.push_back(body);
-    return bodies.back();
+    return bodies.size() - 1;
 }
 
 void PhysicsWorld::step(float dt) {
     for (RigidBody& body : bodies) {
-        if (!body.isStatic) {
+        if (body.sleeping) {
+            body.clearAccumulators();
+            continue;
+        }
+        if (!body.isStatic()) {
             body.applyForce(gravity * (1.0f / body.inverseMass));
         }
-
         body.integrate(dt);
     }
 
@@ -127,13 +129,14 @@ void PhysicsWorld::step(float dt) {
     solver.solve(contacts, solverIterations);
 
     applyRollingResistance(dt);
+    updateSleep(dt);
 }
 
 void PhysicsWorld::generateContacts() {
     contacts.clear();
 
     for (RigidBody& body : bodies) {
-        if (!body.isStatic) {
+        if (!body.isStatic()) {
             if (body.shape == ShapeType::Box) {
                 generateBoxGroundContacts(body);
             } else if (body.shape == ShapeType::Sphere) {
@@ -162,7 +165,7 @@ void PhysicsWorld::generateContacts() {
 void PhysicsWorld::applyRollingResistance(float dt) {
     for (const Contact& contact : contacts) {
         RigidBody* body = contact.a;
-        if (!body || body->isStatic || body->shape != ShapeType::Sphere || contact.b != nullptr) {
+        if (!body || body->isStatic() || body->sleeping || body->shape != ShapeType::Sphere || contact.b != nullptr) {
             continue;
         }
 
@@ -175,23 +178,33 @@ void PhysicsWorld::applyRollingResistance(float dt) {
         body->linearVelocity.z *= scale;
         body->angularVelocity *= scale;
 
-        if (std::abs(body->linearVelocity.x) < 0.015f) {
-            body->linearVelocity.x = 0.0f;
-        }
-        if (std::abs(body->linearVelocity.z) < 0.015f) {
-            body->linearVelocity.z = 0.0f;
-        }
-        if (lengthSquared(body->angularVelocity) < 0.0004f) {
-            body->angularVelocity = {};
+        if (std::abs(body->linearVelocity.x) < 0.015f) body->linearVelocity.x = 0.0f;
+        if (std::abs(body->linearVelocity.z) < 0.015f) body->linearVelocity.z = 0.0f;
+        if (lengthSquared(body->angularVelocity) < 0.0004f) body->angularVelocity = {};
+    }
+}
+
+void PhysicsWorld::updateSleep(float dt) {
+    for (RigidBody& body : bodies) {
+        if (body.isStatic()) continue;
+        const float v2 = lengthSquared(body.linearVelocity) + lengthSquared(body.angularVelocity);
+        if (v2 < sleepThreshold * sleepThreshold) {
+            body.sleepTimer += dt;
+            if (body.sleepTimer >= sleepDelay) {
+                body.sleeping = true;
+                body.linearVelocity = {};
+                body.angularVelocity = {};
+            }
+        } else {
+            body.sleepTimer = 0.0f;
+            body.sleeping = false;
         }
     }
 }
 
 void PhysicsWorld::generateBoxGroundContacts(RigidBody& body) {
     for (Vec3 worldCorner : boxCorners(body)) {
-        if (worldCorner.y >= groundY) {
-            continue;
-        }
+        if (worldCorner.y >= groundY) continue;
 
         Contact contact;
         contact.a = &body;
@@ -199,7 +212,8 @@ void PhysicsWorld::generateBoxGroundContacts(RigidBody& body) {
         contact.normal = {0.0f, 1.0f, 0.0f};
         contact.penetration = groundY - worldCorner.y;
         contact.restitution = body.restitution;
-        contact.friction = 0.65f;
+        contact.friction = combinedFriction(body.friction, groundFriction);
+        contact.restitutionThreshold = restVelocityThreshold;
         contacts.push_back(contact);
     }
 }
@@ -210,45 +224,31 @@ void PhysicsWorld::generateBoxBoxContact(RigidBody& a, RigidBody& b) {
     const Vec3 centerDelta = a.position - b.position;
 
     const auto testAxis = [&](Vec3 axis) {
-        if (lengthSquared(axis) <= 0.000001f) {
-            return true;
-        }
+        if (lengthSquared(axis) <= 0.000001f) return true;
 
         axis = normalized(axis);
         const float distance = std::abs(dot(centerDelta, axis));
         const float penetration = projectedBoxRadius(a, axis) + projectedBoxRadius(b, axis) - distance;
-        if (penetration < 0.0f) {
-            return false;
-        }
+        if (penetration < 0.0f) return false;
 
         if (penetration < bestPenetration) {
             bestPenetration = penetration;
             bestAxis = dot(axis, centerDelta) >= 0.0f ? axis : -axis;
         }
-
         return true;
     };
 
     for (int i = 0; i < 3; ++i) {
-        if (!testAxis(boxAxis(a, i))) {
-            return;
-        }
-        if (!testAxis(boxAxis(b, i))) {
-            return;
-        }
+        if (!testAxis(boxAxis(a, i))) return;
+        if (!testAxis(boxAxis(b, i))) return;
     }
-
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
-            if (!testAxis(cross(boxAxis(a, i), boxAxis(b, j)))) {
-                return;
-            }
+            if (!testAxis(cross(boxAxis(a, i), boxAxis(b, j)))) return;
         }
     }
 
-    if (bestPenetration == std::numeric_limits<float>::max()) {
-        return;
-    }
+    if (bestPenetration == std::numeric_limits<float>::max()) return;
 
     std::vector<Vec3> points;
     points.reserve(8);
@@ -290,7 +290,8 @@ void PhysicsWorld::generateBoxBoxContact(RigidBody& a, RigidBody& b) {
         contact.penetration = bestPenetration;
         contact.correctionWeight = 1.0f / static_cast<float>(contactCount);
         contact.restitution = std::min(a.restitution, b.restitution);
-        contact.friction = 0.65f;
+        contact.friction = combinedFriction(a.friction, b.friction);
+        contact.restitutionThreshold = restVelocityThreshold;
         contacts.push_back(contact);
     }
 }
@@ -305,9 +306,7 @@ void PhysicsWorld::generateSphereBoxContact(RigidBody& sphere, RigidBody& box) {
         const float halfExtent = boxHalfExtent(box, i);
         const float projected = dot(centerDelta, axis);
         const float clamped = std::clamp(projected, -halfExtent, halfExtent);
-        if (std::abs(projected - clamped) > 0.0001f) {
-            centerInsideBox = false;
-        }
+        if (std::abs(projected - clamped) > 0.0001f) centerInsideBox = false;
         closestPoint += axis * clamped;
     }
 
@@ -343,9 +342,7 @@ void PhysicsWorld::generateSphereBoxContact(RigidBody& sphere, RigidBody& box) {
     } else {
         const Vec3 delta = sphere.position - closestPoint;
         const float distanceSquared = lengthSquared(delta);
-        if (distanceSquared >= sphere.radius * sphere.radius) {
-            return;
-        }
+        if (distanceSquared >= sphere.radius * sphere.radius) return;
 
         const float distance = std::sqrt(std::max(distanceSquared, 0.000001f));
         normal = distance > 0.0001f ? delta / distance : Vec3 {0.0f, 1.0f, 0.0f};
@@ -359,15 +356,14 @@ void PhysicsWorld::generateSphereBoxContact(RigidBody& sphere, RigidBody& box) {
     contact.point = closestPoint;
     contact.penetration = penetration;
     contact.restitution = std::min(sphere.restitution, box.restitution);
-    contact.friction = 0.55f;
+    contact.friction = combinedFriction(sphere.friction, box.friction);
+    contact.restitutionThreshold = restVelocityThreshold;
     contacts.push_back(contact);
 }
 
 void PhysicsWorld::generateSphereGroundContact(RigidBody& body) {
     const float bottom = body.position.y - body.radius;
-    if (bottom >= groundY) {
-        return;
-    }
+    if (bottom >= groundY) return;
 
     Contact contact;
     contact.a = &body;
@@ -375,7 +371,8 @@ void PhysicsWorld::generateSphereGroundContact(RigidBody& body) {
     contact.normal = {0.0f, 1.0f, 0.0f};
     contact.penetration = groundY - bottom;
     contact.restitution = body.restitution;
-    contact.friction = 0.45f;
+    contact.friction = combinedFriction(body.friction, groundFriction);
+    contact.restitutionThreshold = restVelocityThreshold;
     contacts.push_back(contact);
 }
 
@@ -384,9 +381,7 @@ void PhysicsWorld::generateSphereSphereContact(RigidBody& a, RigidBody& b) {
     const float distanceSquared = lengthSquared(delta);
     const float radiusSum = a.radius + b.radius;
 
-    if (distanceSquared >= radiusSum * radiusSum) {
-        return;
-    }
+    if (distanceSquared >= radiusSum * radiusSum) return;
 
     const float distance = std::sqrt(std::max(distanceSquared, 0.000001f));
     const Vec3 normal = distance > 0.0001f ? delta / distance : Vec3 {0.0f, 1.0f, 0.0f};
@@ -399,6 +394,7 @@ void PhysicsWorld::generateSphereSphereContact(RigidBody& a, RigidBody& b) {
     contact.point = b.position + normal * b.radius;
     contact.penetration = penetration;
     contact.restitution = std::min(a.restitution, b.restitution);
-    contact.friction = 0.5f;
+    contact.friction = combinedFriction(a.friction, b.friction);
+    contact.restitutionThreshold = restVelocityThreshold;
     contacts.push_back(contact);
 }

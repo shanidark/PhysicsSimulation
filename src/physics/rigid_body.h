@@ -22,16 +22,21 @@ struct RigidBody {
     float inverseMass = 1.0f;
     Mat3 inverseInertiaBody {};
     Mat3 inverseInertiaWorld {};
+    Mat3 rotation {};
 
     float linearDamping = 0.995f;
     float angularDamping = 0.995f;
     float rollingResistance = 0.35f;
     float restitution = 0.45f;
+    float friction = 0.5f;
 
     Vec3 halfExtents {0.5f, 0.5f, 0.5f};
     float radius = 0.5f;
 
-    bool isStatic = false;
+    bool sleeping = false;
+    float sleepTimer = 0.0f;
+
+    bool isStatic() const { return inverseMass <= 0.0f; }
 
     void setBox(float mass, Vec3 size);
     void setSphere(float mass, float sphereRadius);
