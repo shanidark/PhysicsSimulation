@@ -4,7 +4,7 @@
 
 namespace {
 Vec3 velocityAtPoint(const RigidBody* body, Vec3 point) {
-    if (!body || body->isStatic) {
+    if (!body || body->isStatic()) {
         return {};
     }
 
@@ -13,14 +13,14 @@ Vec3 velocityAtPoint(const RigidBody* body, Vec3 point) {
 }
 
 float inverseMass(const RigidBody* body) {
-    if (!body || body->isStatic) {
+    if (!body || body->isStatic()) {
         return 0.0f;
     }
     return body->inverseMass;
 }
 
 float impulseDenominator(const RigidBody* body, Vec3 point, Vec3 direction) {
-    if (!body || body->isStatic) {
+    if (!body || body->isStatic()) {
         return 0.0f;
     }
 
@@ -30,7 +30,7 @@ float impulseDenominator(const RigidBody* body, Vec3 point, Vec3 direction) {
 }
 
 void applyImpulse(RigidBody* body, Vec3 impulse, Vec3 point) {
-    if (body && !body->isStatic) {
+    if (body && !body->isStatic()) {
         body->applyImpulse(impulse, point);
     }
 }
@@ -65,7 +65,7 @@ void ContactSolver::solveContact(Contact& contact) {
         return;
     }
 
-    const float restitution = normalVelocity < -1.0f ? contact.restitution : 0.0f;
+    const float restitution = normalVelocity < -contact.restitutionThreshold ? contact.restitution : 0.0f;
     const float normalImpulseMagnitude = -(1.0f + restitution) * normalVelocity / denominator;
     const Vec3 normalImpulse = contact.normal * normalImpulseMagnitude;
     applyImpulse(contact.a, normalImpulse, contact.point);
@@ -109,11 +109,11 @@ void ContactSolver::correctPosition(Contact& contact) {
     const Vec3 correction =
         contact.normal * (correctionDepth * correctionPercent * contact.correctionWeight / totalInverseMass);
 
-    if (contact.a && !contact.a->isStatic) {
+    if (contact.a && !contact.a->isStatic()) {
         contact.a->position += correction * contact.a->inverseMass;
         contact.a->updateDerivedData();
     }
-    if (contact.b && !contact.b->isStatic) {
+    if (contact.b && !contact.b->isStatic()) {
         contact.b->position -= correction * contact.b->inverseMass;
         contact.b->updateDerivedData();
     }

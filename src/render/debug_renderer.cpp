@@ -3,9 +3,10 @@
 #include <GLFW/glfw3.h>
 
 #include <cmath>
+#include <numbers>
 
 namespace {
-static constexpr float pi = 3.14159265358979323846f;
+constexpr float pi = std::numbers::pi_v<float>;
 
 float radians(float degrees) {
     return degrees * pi / 180.0f;
@@ -174,8 +175,8 @@ bool DebugRenderer::shouldClose() const {
     return glfwWindowShouldClose(window_);
 }
 
-void DebugRenderer::beginFrame() {
-    handleInput();
+void DebugRenderer::beginFrame(float dt) {
+    handleInput(dt);
 
     glfwGetFramebufferSize(window_, &framebufferWidth_, &framebufferHeight_);
     glViewport(0, 0, framebufferWidth_, framebufferHeight_);
@@ -229,7 +230,7 @@ bool DebugRenderer::stepRequested() {
     return requested;
 }
 
-void DebugRenderer::handleInput() {
+void DebugRenderer::handleInput(float dt) {
     if (glfwGetKey(window_, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window_, GLFW_TRUE);
     }
@@ -253,22 +254,22 @@ void DebugRenderer::handleInput() {
     previousContactsDown_ = contactsDown;
 
     if (glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS) {
-        camera_.yaw -= 70.0f * 0.016f;
+        camera_.yaw -= 70.0f * dt;
     }
     if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS) {
-        camera_.yaw += 70.0f * 0.016f;
+        camera_.yaw += 70.0f * dt;
     }
     if (glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) {
-        camera_.pitch = std::min(camera_.pitch + 55.0f * 0.016f, 82.0f);
+        camera_.pitch = std::min(camera_.pitch + 55.0f * dt, 82.0f);
     }
     if (glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS) {
-        camera_.pitch = std::max(camera_.pitch - 55.0f * 0.016f, -15.0f);
+        camera_.pitch = std::max(camera_.pitch - 55.0f * dt, -15.0f);
     }
     if (glfwGetKey(window_, GLFW_KEY_Q) == GLFW_PRESS) {
-        camera_.distance = std::min(camera_.distance + 5.0f * 0.016f, 25.0f);
+        camera_.distance = std::min(camera_.distance + 5.0f * dt, 25.0f);
     }
     if (glfwGetKey(window_, GLFW_KEY_E) == GLFW_PRESS) {
-        camera_.distance = std::max(camera_.distance - 5.0f * 0.016f, 3.0f);
+        camera_.distance = std::max(camera_.distance - 5.0f * dt, 3.0f);
     }
 }
 
@@ -298,7 +299,7 @@ void DebugRenderer::drawGround() {
 }
 
 void DebugRenderer::drawBody(const RigidBody& body) {
-    const Mat3 r = toMat3(body.orientation);
+    const Mat3& r = body.rotation;
     const float transform[16] = {
         r.m[0][0], r.m[1][0], r.m[2][0], 0.0f,
         r.m[0][1], r.m[1][1], r.m[2][1], 0.0f,
