@@ -4,8 +4,8 @@
 #include <chrono>
 #include <iostream>
 
-int main() {
-    PhysicsWorld world;
+static void setupScene(PhysicsWorld& world) {
+    world.reset();
 
     const size_t boxIdx = world.createBox(2.0f, {1.2f, 1.2f, 1.2f}, {0.0f, 5.0f, 0.0f});
     world.bodies[boxIdx].linearVelocity = {1.1f, 0.0f, 0.4f};
@@ -40,6 +40,11 @@ int main() {
     const size_t sphereBIdx = world.createSphere(1.0f, 0.55f, {0.7f, 4.0f, 0.0f});
     world.bodies[sphereBIdx].linearVelocity = {0.45f, 0.0f, 0.0f};
     world.bodies[sphereBIdx].restitution = 0.65f;
+}
+
+int main() {
+    PhysicsWorld world;
+    setupScene(world);
 
     DebugRenderer renderer;
     if (!renderer.init(1280, 720, "Rigid body simulation")) {
@@ -58,6 +63,12 @@ int main() {
         const float frameDt = std::chrono::duration<float>(now - previous).count();
         previous = now;
 
+        if (renderer.resetRequested()) {
+            setupScene(world);
+            accumulator = 0.0f;
+            renderer.setPaused(false);
+        }
+
         if (!renderer.paused()) {
             accumulator += frameDt;
             if (accumulator > maxAccumulator) accumulator = maxAccumulator;
@@ -72,6 +83,7 @@ int main() {
 
         renderer.beginFrame(frameDt);
         renderer.drawWorld(world);
+        renderer.drawGui(world);
         renderer.endFrame();
     }
 

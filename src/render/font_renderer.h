@@ -12,7 +12,6 @@ public:
     void drawText(float x, float y, float scale, std::string_view text) const;
     float measureText(std::string_view text, float scale) const;
     float lineHeight(float scale) const;
-    bool ready() const;
 
 private:
     struct Glyph {

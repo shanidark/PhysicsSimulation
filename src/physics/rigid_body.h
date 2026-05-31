@@ -41,7 +41,6 @@ struct RigidBody {
     void setBox(float mass, Vec3 size);
     void setSphere(float mass, float sphereRadius);
     void applyForce(Vec3 force);
-    void applyForceAtPoint(Vec3 force, Vec3 worldPoint);
     void applyImpulse(Vec3 impulse, Vec3 worldPoint);
     void clearAccumulators();
     void updateDerivedData();

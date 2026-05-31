@@ -25,6 +25,30 @@ find_package(OpenGL REQUIRED)
 find_package(Freetype REQUIRED)
 find_package(glfw3 REQUIRED)
 
+include(FetchContent)
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        v1.92.8
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(imgui)
+
+add_library(imgui_lib STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl2.cpp
+)
+target_include_directories(imgui_lib PUBLIC
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
+)
+target_link_libraries(imgui_lib PUBLIC glfw OpenGL::GL)
+target_compile_options(imgui_lib PRIVATE -w)
+
 add_executable(physics_simulation
     src/main.cpp
     src/physics/contact_solver.cpp
@@ -46,4 +70,5 @@ target_link_libraries(physics_simulation PRIVATE
     OpenGL::GL
     Freetype::Freetype
     glfw
+    imgui_lib
 )
