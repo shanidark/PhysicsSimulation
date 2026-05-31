@@ -1,5 +1,6 @@
 #pragma once
 
+#include "physics/contact_solver.h"
 #include "physics/rigid_body.h"
 #include "physics/contact.h"
 
@@ -20,9 +21,12 @@ struct PhysicsWorld {
     size_t createBox(float mass, Vec3 size, Vec3 position);
     size_t createSphere(float mass, float radius, Vec3 position);
     void step(float dt);
+    void reset();
+    void deleteLastBody();
 
 private:
     void generateContacts();
+    void resolveSleepingContacts();
     void applyRollingResistance(float dt);
     void updateSleep(float dt);
     void generateBoxGroundContacts(RigidBody& body);
@@ -30,4 +34,6 @@ private:
     void generateBoxBoxContact(RigidBody& a, RigidBody& b);
     void generateSphereBoxContact(RigidBody& sphere, RigidBody& box);
     void generateSphereSphereContact(RigidBody& a, RigidBody& b);
+
+    ContactSolver solver_;
 };

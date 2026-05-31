@@ -166,7 +166,3 @@ float FontRenderer::measureText(std::string_view text, float scale) const {
 float FontRenderer::lineHeight(float scale) const {
     return static_cast<float>(pixelHeight_) * scale;
 }
-
-bool FontRenderer::ready() const {
-    return ready_;
-}
